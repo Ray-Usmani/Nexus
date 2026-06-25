@@ -6,26 +6,36 @@ import '../models/category_model.dart';
 import '../models/transaction_model.dart';
 import '../state/app_state.dart';
 
-final _currencyFormat = NumberFormat.currency(
-  locale: 'en_IN',
-  symbol: '₹',
-  decimalDigits: 0,
-);
+String _currencySymbol = 'Rs.';
+String _currencyLocale = 'en_PK';
 
-String formatCurrency(num value) => _currencyFormat.format(value);
+/// Active currency symbol — updated when the user changes currency in settings.
+String get currentCurrencySymbol => _currencySymbol;
 
-/// Standard card container used throughout the app — subtle border,
-/// rounded corners, slightly elevated surface color.
+void configureCurrency({required String symbol, required String locale}) {
+  _currencySymbol = symbol;
+  _currencyLocale = locale;
+}
+
+String formatCurrency(num value) => NumberFormat.currency(
+      locale: _currencyLocale,
+      symbol: _currencySymbol,
+      decimalDigits: 0,
+    ).format(value);
+
+/// Standard card container — obsidian surface, subtle amber border, rounded.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final Color? color;
 
   const AppCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.onTap,
+    this.color,
   });
 
   @override
@@ -34,9 +44,16 @@ class AppCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
+        color: color ?? AppColors.bg2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line.withValues(alpha: 0.4)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: child,
     );
@@ -45,24 +62,29 @@ class AppCard extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
+        splashColor: AppColors.amber.withValues(alpha: 0.08),
+        highlightColor: AppColors.amber.withValues(alpha: 0.04),
         child: card,
       ),
     );
   }
 }
 
-/// Small section label — uppercase, letter-spaced, muted.
+/// Section label — uppercase, letter-spaced, amber accent.
 class SectionLabel extends StatelessWidget {
   final String text;
   const SectionLabel(this.text, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Text(text.toUpperCase(), style: AppText.label);
+    return Text(
+      text.toUpperCase(),
+      style: AppText.label.copyWith(color: AppColors.amber, letterSpacing: 1.4),
+    );
   }
 }
 
@@ -85,9 +107,9 @@ class CategoryChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.18) : AppColors.bg2,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(99),
           border: Border.all(
-            color: selected ? color.withValues(alpha: 0.6) : AppColors.line,
+            color: selected ? color.withValues(alpha: 0.6) : AppColors.line.withValues(alpha: 0.5),
             width: selected ? 1.4 : 1,
           ),
         ),
@@ -98,7 +120,7 @@ class CategoryChip extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               category.name,
-              style: AppText.body.copyWith(
+              style: AppText.labelMd.copyWith(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
                 color: selected ? color : AppColors.t2,
@@ -130,15 +152,15 @@ class TagChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.18) : AppColors.bg2,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(99),
           border: Border.all(
-            color: selected ? color.withValues(alpha: 0.6) : AppColors.line,
+            color: selected ? color.withValues(alpha: 0.6) : AppColors.line.withValues(alpha: 0.5),
             width: selected ? 1.4 : 1,
           ),
         ),
         child: Text(
           tag.name,
-          style: AppText.body.copyWith(
+          style: AppText.labelMd.copyWith(
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
             color: selected ? color : AppColors.t2,
@@ -167,6 +189,7 @@ class TagBadge extends StatelessWidget {
       child: Text(
         tag.name,
         style: TextStyle(
+          fontFamily: 'Inter',
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
           color: color,
@@ -183,6 +206,7 @@ class AnimatedProgressBar extends StatefulWidget {
   final Color color;
   final Color overColor;
   final Duration delay;
+  final double height;
 
   const AnimatedProgressBar({
     super.key,
@@ -190,6 +214,7 @@ class AnimatedProgressBar extends StatefulWidget {
     required this.color,
     this.overColor = AppColors.negative,
     this.delay = Duration.zero,
+    this.height = 6,
   });
 
   @override
@@ -213,8 +238,8 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(99),
       child: Container(
-        height: 6,
-        color: AppColors.line,
+        height: widget.height,
+        color: AppColors.bg4,
         child: Align(
           alignment: Alignment.centerLeft,
           child: AnimatedFractionallySizedBox(
@@ -286,7 +311,7 @@ class AnimatedCurrency extends StatefulWidget {
   final TextStyle style;
   final Duration duration;
   final Duration delay;
-  final String prefix;
+  final String? prefix;
 
   const AnimatedCurrency({
     super.key,
@@ -294,7 +319,7 @@ class AnimatedCurrency extends StatefulWidget {
     required this.style,
     this.duration = const Duration(milliseconds: 800),
     this.delay = Duration.zero,
-    this.prefix = '₹',
+    this.prefix,
   });
 
   @override
@@ -327,9 +352,10 @@ class _AnimatedCurrencyState extends State<AnimatedCurrency>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, _) {
+        final symbol = widget.prefix ?? currentCurrencySymbol;
         final current = widget.value * _animation.value;
         return Text(
-          '${widget.prefix}${NumberFormat('#,##0', 'en_IN').format(current)}',
+          '$symbol${NumberFormat('#,##0', _currencyLocale).format(current)}',
           style: widget.style,
         );
       },
@@ -346,7 +372,7 @@ class EnvelopeRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = envelope.category?.color ?? AppColors.lime;
+    final color = envelope.category?.color ?? AppColors.amber;
     final frac = envelope.fraction.clamp(0.0, 1.0);
     final isOver = envelope.fraction > 1.0;
 
@@ -362,7 +388,7 @@ class EnvelopeRing extends StatelessWidget {
             child: CircularProgressIndicator(
               value: frac,
               strokeWidth: 5,
-              backgroundColor: AppColors.line,
+              backgroundColor: AppColors.bg4,
               valueColor: AlwaysStoppedAnimation(isOver ? AppColors.negative : color),
             ),
           ),
@@ -397,51 +423,103 @@ class SafeToSpendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNegative = safeToSpend < 0;
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
       decoration: BoxDecoration(
         color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.lineHi),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.line.withValues(alpha: 0.5)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x1A000000), blurRadius: 12, offset: Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionLabel('Safe to Spend Today'),
-          const SizedBox(height: 10),
-          AnimatedCurrency(
-            value: safeToSpend.clamp(0, double.infinity),
-            style: AppText.numberLarge(color: AppColors.lime),
-            delay: const Duration(milliseconds: 150),
+          // Decorative ambient glow
+          Stack(
+            children: [
+              Positioned(
+                right: -20,
+                top: -20,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.amber.withValues(alpha: 0.06),
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SAFE TO SPEND TODAY',
+                    style: AppText.label.copyWith(color: AppColors.t3),
+                  ),
+                  const SizedBox(height: 10),
+                  AnimatedCurrency(
+                    value: safeToSpend.abs(),
+                    style: AppText.numberLarge(
+                      color: isNegative ? AppColors.negative : AppColors.amber,
+                    ).copyWith(fontSize: 36),
+                    prefix: isNegative ? '-$currentCurrencySymbol' : currentCurrencySymbol,
+                    delay: const Duration(milliseconds: 150),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
+          Container(
+            height: 0.5,
+            color: AppColors.line.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Today', style: AppText.caption),
-                    Text(formatCurrency(todayTotal), style: AppText.numberSmall()),
-                  ],
+                child: _StatCell(
+                  label: 'Today',
+                  value: formatCurrency(todayTotal),
+                  valueColor: AppColors.t1,
                 ),
               ),
+              Container(width: 0.5, height: 32, color: AppColors.line.withValues(alpha: 0.4)),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Month left', style: AppText.caption),
-                    Text(
-                      formatCurrency(monthlyRemaining),
-                      style: AppText.numberSmall(
-                        color: monthlyRemaining < 0 ? AppColors.negative : AppColors.t2,
-                      ),
-                    ),
-                  ],
+                child: _StatCell(
+                  label: 'Month left',
+                  value: formatCurrency(monthlyRemaining),
+                  valueColor: monthlyRemaining < 0 ? AppColors.negative : AppColors.t1,
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  const _StatCell({required this.label, required this.value, required this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.label.copyWith(color: AppColors.t3, fontSize: 10)),
+          const SizedBox(height: 4),
+          Text(value, style: AppText.numberSmall(color: valueColor).copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -470,26 +548,28 @@ class TransactionTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
+        splashColor: AppColors.amber.withValues(alpha: 0.06),
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
-            color: AppColors.bg2,
+            color: AppColors.bg3,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.line),
+            border: Border.all(color: AppColors.line.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
+              // Category icon container
               Container(
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.bg3,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.lineHi),
+                  color: AppColors.bg4,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.bg5),
                 ),
                 alignment: Alignment.center,
-                child: Text(category?.icon ?? '📝', style: const TextStyle(fontSize: 16)),
+                child: Text(category?.icon ?? '📝', style: const TextStyle(fontSize: 18)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -498,27 +578,40 @@ class TransactionTile extends StatelessWidget {
                   children: [
                     Text(
                       transaction.note.isEmpty ? (category?.name ?? 'Expense') : transaction.note,
-                      style: AppText.body,
+                      style: AppText.body.copyWith(fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
                         if (category != null)
-                          Text(category!.name, style: AppText.caption.copyWith(color: category!.color)),
+                          Text(
+                            category!.name,
+                            style: AppText.caption.copyWith(
+                              color: category!.color.withValues(alpha: 0.9),
+                              fontSize: 11,
+                            ),
+                          ),
                         ...tags.take(2).map((t) => Padding(
                               padding: const EdgeInsets.only(left: 6),
                               child: TagBadge(tag: t),
                             )),
-                        const SizedBox(width: 6),
-                        Text(DateFormat('HH:mm').format(transaction.date), style: AppText.caption),
+                        const Spacer(),
+                        Text(
+                          DateFormat('HH:mm').format(transaction.date),
+                          style: AppText.caption.copyWith(fontSize: 11),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 10),
               Text(
                 '−${formatCurrency(transaction.amount)}',
-                style: AppText.numberMedium(color: AppColors.negative).copyWith(fontSize: 15),
+                style: AppText.numberSmall(color: AppColors.t1).copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -544,16 +637,60 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 36)),
-          const SizedBox(height: 12),
-          Text(title, style: AppText.h2),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.bg2,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.line.withValues(alpha: 0.4)),
+            ),
+            alignment: Alignment.center,
+            child: Text(emoji, style: const TextStyle(fontSize: 30)),
+          ),
+          const SizedBox(height: 16),
+          Text(title, style: AppText.h2.copyWith(fontSize: 18)),
           const SizedBox(height: 6),
-          Text(subtitle, style: AppText.bodyMuted, textAlign: TextAlign.center),
+          Text(
+            subtitle,
+            style: AppText.bodyMuted,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// Icon in a rounded square container — used in settings/list tiles.
+class IconContainer extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final Color? backgroundColor;
+  final double size;
+
+  const IconContainer({
+    super.key,
+    required this.icon,
+    this.iconColor,
+    this.backgroundColor,
+    this.size = 40,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: backgroundColor ?? AppColors.bg3,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: size * 0.5, color: iconColor ?? AppColors.amber),
     );
   }
 }

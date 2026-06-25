@@ -446,6 +446,18 @@ class AppDatabase {
 
   // ─────────────────────────────── AGGREGATES ─────────────────────────────
 
+  /// Wipes user-created records while keeping default categories and settings.
+  Future<void> clearAllUserData() async {
+    final db = await database;
+    final batch = db.batch();
+    batch.delete(tableTransactions);
+    batch.delete(tableBudgetPlans);
+    batch.delete(tableFixed);
+    batch.delete(tableGoals);
+    batch.delete(tableTags);
+    await batch.commit(noResult: true);
+  }
+
   /// Category totals for a date range — used by Insights/Charts/AI context.
   Future<Map<String, double>> categoryTotals(DateTime start, DateTime end) async {
     final db = await database;

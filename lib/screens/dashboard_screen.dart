@@ -6,11 +6,35 @@ import '../theme/app_theme.dart';
 import '../models/category_model.dart';
 import '../state/app_state.dart';
 import '../state/ai_state.dart';
+import '../widgets/app_drawer_button.dart';
+import '../widgets/app_logo.dart';
+import '../widgets/search_icon_button.dart';
+import '../widgets/category_breakdown_chart.dart';
 import '../widgets/common_widgets.dart';
-import 'search_screen.dart';
+import '../widgets/monthly_trend_chart.dart';
+import '../widgets/profile_avatar.dart';
+import '../widgets/transaction_detail_sheet.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  List<MapEntry<DateTime, double>>? _monthlyTotals;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_monthlyTotals == null) _loadChart();
+  }
+
+  Future<void> _loadChart() async {
+    final data = await context.read<AppState>().lastNMonthsTotals(6);
+    if (mounted) setState(() => _monthlyTotals = data);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,32 +45,40 @@ class DashboardScreen extends StatelessWidget {
     final dailyEnvelopes = state.envelopes
         .where((e) => e.category?.section == CategorySection.daily)
         .toList();
+    final breakdown = state.categoryBreakdown();
 
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const AppDrawerButton(),
+              const Spacer(),
+              const AppLogo(size: 32),
+              const SizedBox(width: 8),
+              Text(
+                'SpendWise',
+                style: AppText.h2.copyWith(color: AppColors.amber, letterSpacing: -0.5, fontSize: 20),
+              ),
+              const Spacer(),
+              const SearchIconButton(),
+              const ProfileAvatar(size: 40),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SectionLabel(monthLabel),
-                  const SizedBox(height: 4),
-                  Text('Dashboard', style: AppText.display),
-                ],
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.search_rounded, color: AppColors.t2, size: 20),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                  Text(
+                    monthLabel.toUpperCase(),
+                    style: AppText.label.copyWith(color: AppColors.t3),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined, color: AppColors.t2, size: 20),
-                    onPressed: () {},
-                  ),
+                  const SizedBox(height: 2),
+                  Text('Dashboard', style: AppText.display.copyWith(fontSize: 26)),
                 ],
               ),
             ],
@@ -69,6 +101,32 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (_monthlyTotals != null && _monthlyTotals!.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('6-month trend'),
+                  const SizedBox(height: 16),
+                  MonthlyTrendChart(monthlyTotals: _monthlyTotals!),
+                ],
+              ),
+            ),
+          ],
+          if (breakdown.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Category breakdown'),
+                  const SizedBox(height: 12),
+                  CategoryBreakdownChart(breakdown: breakdown),
+                ],
+              ),
+            ),
+          ],
           if (ai.dailyInsight != null) ...[
             const SizedBox(height: 14),
             AppCard(
@@ -111,7 +169,7 @@ class DashboardScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
-                            const Icon(Icons.warning_amber_rounded, color: AppColors.warn, size: 16),
+                            const Icon(Icons.warning_amber_rounded, color: AppColors.amber, size: 16),
                             const SizedBox(width: 8),
                             Expanded(child: Text(a.reason, style: AppText.bodyMuted.copyWith(fontSize: 12))),
                           ],
@@ -173,7 +231,12 @@ class DashboardScreen extends StatelessWidget {
     return today.map((t) {
       final cat = state.categoryById(t.categoryId);
       final tags = state.tagsForIds(t.tagIds);
-      return TransactionTile(transaction: t, category: cat, tags: tags);
+      return TransactionTile(
+        transaction: t,
+        category: cat,
+        tags: tags,
+        onTap: () => showTransactionDetailSheet(context, t, category: cat),
+      );
     }).toList();
   }
 }

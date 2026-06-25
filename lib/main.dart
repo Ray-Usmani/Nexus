@@ -2,36 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'theme/app_theme.dart';
+import 'widgets/app_logo.dart';
 import 'state/app_state.dart';
 import 'state/ai_state.dart';
 import 'services/notification_service.dart';
 import 'services/widget_service.dart';
 import 'screens/root_shell.dart';
 import 'screens/add_expense_screen.dart';
+import 'screens/lock_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await NotificationService.instance.init();
-  } catch (_) {}
+  } catch (e, stack) {
+    debugPrint('Notification init failed: $e');
+    debugPrint('$stack');
+  }
   try {
     await WidgetService.instance.init();
-  } catch (_) {}
-  runApp(const NexusApp());
+  } catch (e, stack) {
+    debugPrint('Widget init failed: $e');
+    debugPrint('$stack');
+  }
+  runApp(const SpendWiseApp());
 }
 
-class NexusApp extends StatelessWidget {
-  const NexusApp({super.key});
+class SpendWiseApp extends StatelessWidget {
+  const SpendWiseApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AppState()..init()),
+        ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => AiState()),
       ],
       child: MaterialApp(
-        title: 'Nexus',
+        title: 'SpendWise',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         home: const _AppRoot(),
@@ -53,23 +61,72 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AppState? _appState;
   final _alertedCategories = <String>{};
+  bool _needsUnlock = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onReady());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _appState?.removeListener(_sync);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _appState?.biometricsEnabled == true &&
+        mounted) {
+      setState(() => _needsUnlock = true);
+    }
   }
 
   Future<void> _onReady() async {
     if (!mounted) return;
     _appState = context.read<AppState>();
     final aiState = context.read<AiState>();
+
+    try {
+      await _appState!.init();
+    } catch (e, stack) {
+      debugPrint('AppState init failed: $e');
+      debugPrint('$stack');
+      return;
+    }
+    if (!mounted) return;
+
+    await NotificationService.instance.applyPreferences(
+      dailyEnabled: _appState!.notificationsDaily,
+      weeklyEnabled: _appState!.notificationsWeekly,
+    );
+
+    if (_appState!.biometricsEnabled) {
+      setState(() => _needsUnlock = true);
+    }
+
     _appState!.addListener(_sync);
-    await aiState.refreshDailyInsight(_appState!);
-    _checkOverspend(_appState!);
+    WidgetService.instance.syncFromAppState(_appState!);
+
+    Future.microtask(() async {
+      if (!mounted || _appState == null) return;
+      try {
+        await aiState.refreshDailyInsight(_appState!);
+      } catch (e, stack) {
+        debugPrint('Daily insight refresh failed: $e');
+        debugPrint('$stack');
+      }
+      if (mounted && _appState != null) {
+        _checkOverspend(_appState!);
+      }
+    });
   }
 
   void _sync() {
@@ -79,6 +136,7 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   void _checkOverspend(AppState state) {
+    if (!state.notificationsOverspend) return;
     for (final e in state.envelopes) {
       final name = e.category?.name ?? 'Category';
       if (e.planned > 0 && e.actual > e.planned && !_alertedCategories.contains(name)) {
@@ -88,10 +146,8 @@ class _AppRootState extends State<_AppRoot> {
     }
   }
 
-  @override
-  void dispose() {
-    _appState?.removeListener(_sync);
-    super.dispose();
+  void _onUnlocked() {
+    setState(() => _needsUnlock = false);
   }
 
   @override
@@ -99,10 +155,23 @@ class _AppRootState extends State<_AppRoot> {
     final state = context.watch<AppState>();
 
     if (state.loading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.bg0,
-        body: Center(child: CircularProgressIndicator(color: AppColors.lime)),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const AppLogo(size: 72),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(color: AppColors.amber),
+            ],
+          ),
+        ),
       );
+    }
+
+    if (state.biometricsEnabled && _needsUnlock) {
+      return LockScreen(onUnlocked: _onUnlocked);
     }
 
     return const RootShell();

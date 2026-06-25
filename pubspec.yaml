@@ -1,5 +1,5 @@
 name: budget_tracker
-description: Nexus — personal budget tracker, local-first with optional AI insights.
+description: SpendWise — personal budget tracker, local-first with optional AI insights.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -38,12 +38,23 @@ dependencies:
   # AI backend client
   http: ^1.2.0
 
+  # Voice recording (v6+ required — v5 record_linux breaks on current Flutter)
+  record: ^6.2.0
+  permission_handler: ^11.3.1
+
   # Local notifications
   flutter_local_notifications: ^17.2.0
   timezone: ^0.9.4
+  flutter_timezone: ^4.1.0
 
   # Home screen widget
   home_widget: ^0.6.0
+
+  # Biometric authentication
+  local_auth: ^2.3.0
+
+  # Profile photo picker
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
@@ -54,9 +65,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: logo.png
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: logo.png
+  image_path: assets/logo.png
+  adaptive_icon_background: "#131313"
+  adaptive_icon_foreground: assets/logo.png
 
 flutter:
   uses-material-design: true

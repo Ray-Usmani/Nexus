@@ -18,8 +18,8 @@ class ExpenseWidgetProvider : HomeWidgetProvider() {
 
         for (id in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.expense_widget).apply {
-                setTextViewText(R.id.today_total, "Today: ₹${todayTotal.toInt()}")
-                setTextViewText(R.id.safe_to_spend, "Safe: ₹${safeToSpend.toInt()}/day")
+                setTextViewText(R.id.today_total, "Today: Rs.${todayTotal.toInt()}")
+                setTextViewText(R.id.safe_to_spend, "Safe: Rs.${safeToSpend.toInt()}/day")
             }
             appWidgetManager.updateAppWidget(id, views)
         }

@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../state/app_state.dart';
@@ -9,18 +12,35 @@ class WidgetService {
   static const _appGroupId = 'group.budget_tracker';
   static const _androidWidget = 'ExpenseWidgetProvider';
 
+  bool _initialized = false;
+
   Future<void> init() async {
-    await HomeWidget.setAppGroupId(_appGroupId);
-    await HomeWidget.registerInteractivityCallback(_backgroundCallback);
+    if (_initialized) return;
+    try {
+      if (Platform.isIOS) {
+        await HomeWidget.setAppGroupId(_appGroupId);
+        await HomeWidget.registerInteractivityCallback(_backgroundCallback);
+      }
+      _initialized = true;
+    } catch (e, stack) {
+      debugPrint('WidgetService init failed: $e');
+      debugPrint('$stack');
+    }
   }
 
   Future<void> syncFromAppState(AppState state) async {
-    await HomeWidget.saveWidgetData('today_total', state.todayTotal);
-    await HomeWidget.saveWidgetData('safe_to_spend', state.safeToSpendPerDay.clamp(0, double.infinity));
-    await HomeWidget.updateWidget(
-      name: _androidWidget,
-      androidName: _androidWidget,
-    );
+    if (!_initialized) return;
+    try {
+      await HomeWidget.saveWidgetData('today_total', state.todayTotal);
+      await HomeWidget.saveWidgetData('safe_to_spend', state.safeToSpendPerDay.clamp(0, double.infinity));
+      await HomeWidget.updateWidget(
+        name: _androidWidget,
+        androidName: _androidWidget,
+      );
+    } catch (e, stack) {
+      debugPrint('Widget sync failed: $e');
+      debugPrint('$stack');
+    }
   }
 
   @pragma('vm:entry-point')

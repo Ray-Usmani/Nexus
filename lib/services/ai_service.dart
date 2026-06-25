@@ -19,6 +19,51 @@ class AiInsightResponse {
       );
 }
 
+class VoiceParseResult {
+  final String transcription;
+  final double? amount;
+  final String? categoryId;
+  final String? categoryName;
+  final String note;
+  final String paymentMethod;
+  final DateTime? date;
+  final List<String> tagIds;
+  final String? error;
+
+  VoiceParseResult({
+    required this.transcription,
+    this.amount,
+    this.categoryId,
+    this.categoryName,
+    this.note = '',
+    this.paymentMethod = 'Cash',
+    this.date,
+    this.tagIds = const [],
+    this.error,
+  });
+
+  bool get hasAmount => amount != null && amount! > 0;
+
+  factory VoiceParseResult.fromJson(Map<String, dynamic> json) {
+    DateTime? parsedDate;
+    final dateStr = json['date'] as String?;
+    if (dateStr != null && dateStr.isNotEmpty) {
+      parsedDate = DateTime.tryParse(dateStr);
+    }
+    return VoiceParseResult(
+      transcription: json['transcription'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble(),
+      categoryId: json['category_id'] as String?,
+      categoryName: json['category_name'] as String?,
+      note: json['note'] as String? ?? '',
+      paymentMethod: json['payment_method'] as String? ?? 'Cash',
+      date: parsedDate,
+      tagIds: (json['tag_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      error: json['error'] as String?,
+    );
+  }
+}
+
 class AiService {
   Map<String, String> get _headers {
     final h = {'Content-Type': 'application/json'};
@@ -44,6 +89,42 @@ class AiService {
       );
       if (res.statusCode == 200) {
         return AiInsightResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Send recorded audio (or typed text) to backend for STT + field extraction.
+  Future<VoiceParseResult?> parseVoiceExpense({
+    required Map<String, dynamic> context,
+    List<int>? audioBytes,
+    String? audioFilename,
+    String? text,
+  }) async {
+    if (!ApiConfig.isConfigured) return null;
+    try {
+      final req = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiConfig.baseUrl}/voice/parse'),
+      );
+      if (ApiConfig.appSecret.isNotEmpty) {
+        req.headers['Authorization'] = 'Bearer ${ApiConfig.appSecret}';
+      }
+      req.fields['context'] = jsonEncode(context);
+      if (text != null && text.trim().isNotEmpty) {
+        req.fields['text'] = text.trim();
+      }
+      if (audioBytes != null && audioBytes.isNotEmpty) {
+        req.files.add(http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: audioFilename ?? 'recording.m4a',
+        ));
+      }
+      final streamed = await req.send();
+      final res = await http.Response.fromStream(streamed);
+      if (res.statusCode == 200) {
+        return VoiceParseResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
       }
     } catch (_) {}
     return null;
@@ -82,7 +163,7 @@ class AiService {
     if (safe < 0) {
       recs.add('Daily budget is exceeded — consider pausing discretionary spend.');
     } else if (safe > 0) {
-      recs.add('You can safely spend about ₹${safe.toStringAsFixed(0)} per day for the rest of the month.');
+      recs.add('You can safely spend about Rs.${safe.toStringAsFixed(0)} per day for the rest of the month.');
     }
     if (over.isNotEmpty) {
       final names = over.map((e) => (e as Map)['category']).join(', ');

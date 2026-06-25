@@ -67,8 +67,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.dark(
-            primary: AppColors.lime,
-            onPrimary: AppColors.bg0,
+            primary: AppColors.amber,
+            onPrimary: AppColors.onAmber,
             surface: AppColors.bg2,
             onSurface: AppColors.t1,
           ),
@@ -136,7 +136,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.mic_rounded, color: AppColors.lime),
+              icon: const Icon(Icons.mic_rounded, color: AppColors.amber),
               onPressed: () => showVoiceInputSheet(context),
             ),
           ],
@@ -147,13 +147,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           decoration: BoxDecoration(
             color: AppColors.bg2,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.lineHi),
+            border: Border.all(color: AppColors.line.withValues(alpha: 0.4)),
           ),
           child: Column(
             children: [
               const SectionLabel('Amount'),
               const SizedBox(height: 8),
-              Text('₹$_amount', style: AppText.numberLarge().copyWith(fontSize: 42), textAlign: TextAlign.center),
+              Text('${state.currencySymbol}$_amount', style: AppText.numberLarge().copyWith(fontSize: 42), textAlign: TextAlign.center),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -197,8 +197,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             return ChoiceChip(
               label: Text(m),
               selected: sel,
-              selectedColor: AppColors.limeDim,
-              labelStyle: TextStyle(color: sel ? AppColors.lime : AppColors.t2),
+              selectedColor: AppColors.amberBright.withValues(alpha: 0.2),
+              labelStyle: TextStyle(color: sel ? AppColors.amber : AppColors.t2),
               onSelected: (_) => setState(() => _paymentMethod = m),
             );
           }).toList(),
@@ -259,13 +259,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           child: ElevatedButton(
             onPressed: _save,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _saved ? AppColors.bg3 : AppColors.lime,
-              foregroundColor: _saved ? AppColors.lime : AppColors.bg0,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: _saved ? AppColors.bg4 : AppColors.amber,
+              foregroundColor: _saved ? AppColors.amber : AppColors.onAmber,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+              elevation: _saved ? 0 : 2,
+              shadowColor: AppColors.amber.withValues(alpha: 0.3),
             ),
-            child: Text(_saved ? '✓ Saved' : 'Save Expense',
-                style: AppText.body.copyWith(fontWeight: FontWeight.w700, color: _saved ? AppColors.lime : AppColors.bg0)),
+            child: Text(
+              _saved ? '✓ Saved!' : 'SAVE EXPENSE',
+              style: AppText.label.copyWith(
+                fontSize: 14,
+                color: _saved ? AppColors.amber : AppColors.onAmber,
+                letterSpacing: 1.2,
+              ),
+            ),
           ),
         ),
       ],
@@ -288,7 +296,7 @@ class _QuickChip extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label, style: AppText.numberSmall(color: AppColors.lime)),
+          child: Text(label, style: AppText.numberSmall(color: AppColors.amber)),
         ),
       ),
     );

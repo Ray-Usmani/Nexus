@@ -1,6 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../db/app_database.dart';
+import '../widgets/common_widgets.dart';
 import '../models/category_model.dart';
 import '../models/transaction_model.dart';
 import '../models/budget_plan_model.dart';
@@ -35,6 +40,37 @@ class AppState extends ChangeNotifier {
 
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   bool _loading = true;
+  bool _initializing = false;
+
+  // Settings (persisted in SQLite settings table)
+  String? _profileImagePath;
+  String _currencyCode = 'PKR';
+  String _currencySymbol = 'Rs.';
+  String _currencyLocale = 'en_PK';
+  bool _notificationsDaily = true;
+  bool _notificationsWeekly = true;
+  bool _notificationsOverspend = true;
+  bool _biometricsEnabled = false;
+
+  static const settingProfileImage = 'profile_image_path';
+  static const settingCurrencyCode = 'currency_code';
+  static const settingCurrencySymbol = 'currency_symbol';
+  static const settingCurrencyLocale = 'currency_locale';
+  static const settingNotificationsDaily = 'notifications_daily';
+  static const settingNotificationsWeekly = 'notifications_weekly';
+  static const settingNotificationsOverspend = 'notifications_overspend';
+  static const settingBiometricsEnabled = 'biometrics_enabled';
+
+  static const currencyOptions = <({String code, String symbol, String locale, String label})>[
+    (code: 'PKR', symbol: 'Rs.', locale: 'en_PK', label: 'PKR (Rs.)'),
+    (code: 'USD', symbol: '\$', locale: 'en_US', label: 'USD (\$)'),
+    (code: 'EUR', symbol: '€', locale: 'de_DE', label: 'EUR (€)'),
+    (code: 'GBP', symbol: '£', locale: 'en_GB', label: 'GBP (£)'),
+    (code: 'INR', symbol: '₹', locale: 'en_IN', label: 'INR (₹)'),
+    (code: 'AED', symbol: 'AED', locale: 'ar_AE', label: 'AED'),
+    (code: 'SAR', symbol: 'SAR', locale: 'ar_SA', label: 'SAR'),
+    (code: 'CAD', symbol: 'CA\$', locale: 'en_CA', label: 'CAD (CA\$)'),
+  ];
 
   // ── Getters ────────────────────────────────────────────────────────────
   List<CategoryModel> get categories => _categories;
@@ -45,6 +81,17 @@ class AppState extends ChangeNotifier {
   List<GoalModel> get goals => _goals;
   DateTime get focusedMonth => _focusedMonth;
   bool get loading => _loading;
+
+  String? get profileImagePath => _profileImagePath;
+  String get currencyCode => _currencyCode;
+  String get currencySymbol => _currencySymbol;
+  String get currencyLocale => _currencyLocale;
+  String get currencyLabel =>
+      currencyOptions.firstWhere((c) => c.code == _currencyCode, orElse: () => currencyOptions.first).label;
+  bool get notificationsDaily => _notificationsDaily;
+  bool get notificationsWeekly => _notificationsWeekly;
+  bool get notificationsOverspend => _notificationsOverspend;
+  bool get biometricsEnabled => _biometricsEnabled;
 
   List<CategoryModel> categoriesBySection(CategorySection s) =>
       _categories.where((c) => c.section == s).toList();
@@ -68,18 +115,28 @@ class AppState extends ChangeNotifier {
 
   // ── Init ───────────────────────────────────────────────────────────────
   Future<void> init() async {
-    await _db.ensurePlansForMonth(_focusedMonth.year, _focusedMonth.month);
-    await Future.wait([
-      _refreshCategories(),
-      _refreshTags(),
-      _refreshPlans(),
-      _refreshTransactions(),
-      _refreshFixed(),
-      _refreshGoals(),
-    ]);
-    await _processDueFixedAllocations();
-    _loading = false;
-    notifyListeners();
+    _initializing = true;
+    try {
+      await _db.ensurePlansForMonth(_focusedMonth.year, _focusedMonth.month);
+      await Future.wait([
+        _refreshCategories(),
+        _refreshTags(),
+        _refreshPlans(),
+        _refreshTransactions(),
+        _refreshFixed(),
+        _refreshGoals(),
+      ]);
+      await _loadSettings();
+      await _processDueFixedAllocations();
+    } finally {
+      _initializing = false;
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  void _notifyIfReady() {
+    if (!_initializing) notifyListeners();
   }
 
   Future<void> _refreshCategories() async => _categories = await _db.getAllCategories();
@@ -92,6 +149,62 @@ class AppState extends ChangeNotifier {
     final start = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
     final end = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
     _transactions = await _db.getTransactionsInRange(start, end);
+  }
+
+  Future<void> _loadSettings() async {
+    _profileImagePath = await _db.getSetting(settingProfileImage);
+    _currencyCode = await _db.getSetting(settingCurrencyCode) ?? 'PKR';
+    _currencySymbol = await _db.getSetting(settingCurrencySymbol) ?? 'Rs.';
+    _currencyLocale = await _db.getSetting(settingCurrencyLocale) ?? 'en_PK';
+    _notificationsDaily = (await _db.getSetting(settingNotificationsDaily)) != 'false';
+    _notificationsWeekly = (await _db.getSetting(settingNotificationsWeekly)) != 'false';
+    _notificationsOverspend = (await _db.getSetting(settingNotificationsOverspend)) != 'false';
+    _biometricsEnabled = (await _db.getSetting(settingBiometricsEnabled)) == 'true';
+    configureCurrency(symbol: _currencySymbol, locale: _currencyLocale);
+  }
+
+  Future<void> setProfileImageFromFile(String sourcePath) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final dest = p.join(dir.path, 'profile.jpg');
+    await File(sourcePath).copy(dest);
+    _profileImagePath = dest;
+    await _db.setSetting(settingProfileImage, dest);
+    notifyListeners();
+  }
+
+  Future<void> setCurrency(String code, String symbol, String locale) async {
+    _currencyCode = code;
+    _currencySymbol = symbol;
+    _currencyLocale = locale;
+    configureCurrency(symbol: symbol, locale: locale);
+    await _db.setSetting(settingCurrencyCode, code);
+    await _db.setSetting(settingCurrencySymbol, symbol);
+    await _db.setSetting(settingCurrencyLocale, locale);
+    notifyListeners();
+  }
+
+  Future<void> setNotificationsDaily(bool enabled) async {
+    _notificationsDaily = enabled;
+    await _db.setSetting(settingNotificationsDaily, enabled.toString());
+    notifyListeners();
+  }
+
+  Future<void> setNotificationsWeekly(bool enabled) async {
+    _notificationsWeekly = enabled;
+    await _db.setSetting(settingNotificationsWeekly, enabled.toString());
+    notifyListeners();
+  }
+
+  Future<void> setNotificationsOverspend(bool enabled) async {
+    _notificationsOverspend = enabled;
+    await _db.setSetting(settingNotificationsOverspend, enabled.toString());
+    notifyListeners();
+  }
+
+  Future<void> setBiometricsEnabled(bool enabled) async {
+    _biometricsEnabled = enabled;
+    await _db.setSetting(settingBiometricsEnabled, enabled.toString());
+    notifyListeners();
   }
 
   Future<void> setFocusedMonth(DateTime month) async {
@@ -126,7 +239,7 @@ class AppState extends ChangeNotifier {
     if (date.year == _focusedMonth.year && date.month == _focusedMonth.month) {
       await _refreshTransactions();
     }
-    notifyListeners();
+    _notifyIfReady();
   }
 
   /// Splits one transaction across multiple categories. [total] is shown
@@ -595,6 +708,19 @@ class AppState extends ChangeNotifier {
   }
 
   // ═══════════════════════════ SMART SEARCH ════════════════════════════════
+
+  /// Deletes all transactions, plans, goals, fixed allocations, and tags.
+  Future<void> clearAllUserData() async {
+    await _db.clearAllUserData();
+    await Future.wait([
+      _refreshTransactions(),
+      _refreshPlans(),
+      _refreshFixed(),
+      _refreshGoals(),
+      _refreshTags(),
+    ]);
+    notifyListeners();
+  }
 
   Future<List<TransactionModel>> search({
     String? text,

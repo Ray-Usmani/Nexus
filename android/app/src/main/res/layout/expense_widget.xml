@@ -10,7 +10,7 @@
         android:id="@+id/widget_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Nexus"
+        android:text="SpendWise"
         android:textColor="#8A93A3"
         android:textSize="12sp" />
 
@@ -18,7 +18,7 @@
         android:id="@+id/today_total"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Today: ₹0"
+        android:text="Today: Rs.0"
         android:textColor="#F3F5F7"
         android:textSize="18sp"
         android:layout_marginTop="8dp" />
@@ -27,7 +27,7 @@
         android:id="@+id/safe_to_spend"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Safe: ₹0/day"
+        android:text="Safe: Rs.0/day"
         android:textColor="#CFFF4D"
         android:textSize="14sp"
         android:layout_marginTop="4dp" />

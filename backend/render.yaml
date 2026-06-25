@@ -11,5 +11,7 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         value: meta-llama/llama-3.3-70b:free
+      - key: OPENROUTER_STT_MODEL
+        value: openai/whisper-large-v3
       - key: APP_SECRET
         sync: false

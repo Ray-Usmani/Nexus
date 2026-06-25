@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Nexus</string>
+	<string>SpendWise</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,6 +47,12 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SpendWise uses Face ID to protect your financial data.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SpendWise needs microphone access for voice expense entry.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SpendWise needs access to your photo library to set a profile picture.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

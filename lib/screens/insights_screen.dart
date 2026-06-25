@@ -1,12 +1,13 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../state/ai_state.dart';
+import '../widgets/app_drawer_button.dart';
+import '../widgets/search_icon_button.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/monthly_trend_chart.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
@@ -42,9 +43,23 @@ class _InsightsScreenState extends State<InsightsScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
         children: [
-          const SectionLabel('Analytics'),
-          const SizedBox(height: 4),
-          Text('Insights', style: AppText.display),
+          Row(
+            children: [
+              const AppDrawerButton(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SectionLabel('Analytics'),
+                    const SizedBox(height: 4),
+                    Text('Insights', style: AppText.display),
+                  ],
+                ),
+              ),
+              const SearchIconButton(),
+            ],
+          ),
           const SizedBox(height: 16),
           AppCard(
             child: Column(
@@ -71,18 +86,18 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   children: [
                     Text('Budget health', style: AppText.bodyMuted),
                     const Spacer(),
-                    Text('${review.healthScore.toStringAsFixed(0)}%', style: AppText.numberSmall(color: AppColors.lime)),
+                    Text('${review.healthScore.toStringAsFixed(0)}%', style: AppText.numberSmall(color: AppColors.amber)),
                   ],
                 ),
                 const SizedBox(height: 6),
-                AnimatedProgressBar(fraction: review.healthScore / 100, color: AppColors.lime),
+                AnimatedProgressBar(fraction: review.healthScore / 100, color: AppColors.amber),
                 if (review.changeVsLastWeek != 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
                       '${review.changeVsLastWeek >= 0 ? '+' : ''}${review.changeVsLastWeek.toStringAsFixed(0)}% vs last week',
                       style: AppText.caption.copyWith(
-                        color: review.changeVsLastWeek > 0 ? AppColors.negative : AppColors.lime,
+                        color: review.changeVsLastWeek > 0 ? AppColors.negative : AppColors.amber,
                       ),
                     ),
                   ),
@@ -100,7 +115,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       const SectionLabel('AI Recommendations'),
                       const Spacer(),
                       if (ai.loading)
-                        const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.lime)),
+                        const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -112,7 +127,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('• ', style: TextStyle(color: AppColors.lime)),
+                              const Text('• ', style: TextStyle(color: AppColors.amber)),
                               Expanded(child: Text(r, style: AppText.bodyMuted.copyWith(fontSize: 13))),
                             ],
                           ),
@@ -125,7 +140,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
           const SizedBox(height: 14),
           TextButton(
             onPressed: ai.loading ? null : () => ai.refreshWeeklyInsight(state),
-            child: Text(ai.loading ? 'Loading AI insight…' : 'Refresh AI insight', style: const TextStyle(color: AppColors.lime)),
+            child: Text(ai.loading ? 'Loading AI insight…' : 'Refresh AI insight', style: const TextStyle(color: AppColors.amber)),
           ),
           const SizedBox(height: 14),
           if (_monthlyTotals != null && _monthlyTotals!.isNotEmpty)
@@ -135,46 +150,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 children: [
                   const SectionLabel('6-month trend'),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    height: 160,
-                    child: BarChart(
-                      BarChartData(
-                        gridData: const FlGridData(show: false),
-                        borderData: FlBorderData(show: false),
-                        titlesData: FlTitlesData(
-                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (v, _) {
-                                final i = v.toInt();
-                                if (i < 0 || i >= _monthlyTotals!.length) return const SizedBox();
-                                return Text(
-                                  DateFormat('MMM').format(_monthlyTotals![i].key),
-                                  style: AppText.caption.copyWith(fontSize: 9),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        barGroups: _monthlyTotals!.asMap().entries.map((e) {
-                          return BarChartGroupData(
-                            x: e.key,
-                            barRods: [
-                              BarChartRodData(
-                                toY: e.value.value,
-                                color: AppColors.lime,
-                                width: 14,
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
+                  MonthlyTrendChart(monthlyTotals: _monthlyTotals!),
                 ],
               ),
             ),

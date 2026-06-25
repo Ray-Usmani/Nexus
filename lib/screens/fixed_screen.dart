@@ -8,6 +8,7 @@ import '../models/fixed_allocation_model.dart';
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/search_icon_button.dart';
 
 class FixedScreen extends StatelessWidget {
   const FixedScreen({super.key});
@@ -18,10 +19,22 @@ class FixedScreen extends StatelessWidget {
     final fixedCats = state.categoriesBySection(CategorySection.fixed);
     final upcoming = state.upcomingDue;
 
-    return SafeArea(
-      child: ListView(
+    return Scaffold(
+      backgroundColor: AppColors.bg0,
+      body: SafeArea(
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
         children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.t1),
+                onPressed: () => Navigator.pop(context),
+              ),
+              const Spacer(),
+              const SearchIconButton(),
+            ],
+          ),
           const SectionLabel('Recurring'),
           const SizedBox(height: 4),
           Text('Fixed Expenses', style: AppText.display),
@@ -43,8 +56,8 @@ class FixedScreen extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: TextButton.icon(
               onPressed: () => _showAddSheet(context),
-              icon: const Icon(Icons.add, color: AppColors.lime, size: 18),
-              label: const Text('Add allocation', style: TextStyle(color: AppColors.lime)),
+              icon: const Icon(Icons.add, color: AppColors.amber, size: 18),
+              label: const Text('Add allocation', style: TextStyle(color: AppColors.amber)),
             ),
           ),
           ...fixedCats.map((cat) {
@@ -73,6 +86,7 @@ class FixedScreen extends StatelessWidget {
             );
           }),
         ],
+        ),
       ),
     );
   }
@@ -139,7 +153,7 @@ class _FixedCard extends StatelessWidget {
             children: [
               TextButton(
                 onPressed: () => state.logFixedAllocation(allocation),
-                child: const Text('Log now', style: TextStyle(color: AppColors.lime)),
+                child: const Text('Log now', style: TextStyle(color: AppColors.amber)),
               ),
               TextButton(
                 onPressed: () => state.deleteFixedAllocation(allocation.id),
@@ -219,7 +233,7 @@ class _AddFixedSheetState extends State<_AddFixedSheet> {
               ));
               if (context.mounted) Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.lime, foregroundColor: AppColors.bg0),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.amber, foregroundColor: AppColors.onAmber),
             child: const Text('Save'),
           ),
         ],

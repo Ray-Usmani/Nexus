@@ -6,6 +6,7 @@ import '../models/budget_plan_model.dart';
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/search_icon_button.dart';
 
 class PlanningScreen extends StatelessWidget {
   const PlanningScreen({super.key});
@@ -16,10 +17,22 @@ class PlanningScreen extends StatelessWidget {
     final monthLabel = DateFormat('MMMM yyyy').format(state.focusedMonth);
     final remaining = state.totalPlannedAll - state.monthTotalAll;
 
-    return SafeArea(
-      child: ListView(
+    return Scaffold(
+      backgroundColor: AppColors.bg0,
+      body: SafeArea(
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
         children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.t1),
+                onPressed: () => Navigator.pop(context),
+              ),
+              const Spacer(),
+              const SearchIconButton(),
+            ],
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -54,7 +67,7 @@ class PlanningScreen extends StatelessWidget {
                   icon: const Icon(Icons.copy_rounded, size: 16),
                   label: const Text('Copy prev month'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.lime,
+                    foregroundColor: AppColors.amber,
                     side: const BorderSide(color: AppColors.line),
                   ),
                 ),
@@ -66,7 +79,7 @@ class PlanningScreen extends StatelessWidget {
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add row'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.lime,
+                    foregroundColor: AppColors.amber,
                     side: const BorderSide(color: AppColors.line),
                   ),
                 ),
@@ -83,7 +96,7 @@ class PlanningScreen extends StatelessWidget {
                   children: [
                     const SectionLabel('Remaining allocation'),
                     Text(formatCurrency(remaining), style: AppText.numberMedium(
-                      color: remaining < 0 ? AppColors.negative : AppColors.lime,
+                      color: remaining < 0 ? AppColors.negative : AppColors.amber,
                     )),
                   ],
                 ),
@@ -115,7 +128,7 @@ class PlanningScreen extends StatelessWidget {
                             style: AppText.numberSmall(color: AppColors.t2),
                           ),
                           const SizedBox(height: 6),
-                          AnimatedProgressBar(fraction: frac, color: env.category?.color ?? AppColors.lime),
+                          AnimatedProgressBar(fraction: frac, color: env.category?.color ?? AppColors.amber),
                         ],
                       ),
                     ),
@@ -132,6 +145,7 @@ class PlanningScreen extends StatelessWidget {
           else
             ...state.plans.map((p) => _PlanRow(plan: p)),
         ],
+        ),
       ),
     );
   }
