@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/category_model.dart';
+import '../services/ai_service.dart';
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/common_widgets.dart';
@@ -79,6 +80,41 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
+  void _applyVoiceResult(VoiceParseResult result) {
+    setState(() {
+      if (result.amount != null && result.amount! > 0) {
+        final amount = result.amount!;
+        _amount = amount.toStringAsFixed(amount % 1 == 0 ? 0 : 2);
+      }
+      final note = result.note.isNotEmpty ? result.note : result.transcription;
+      if (note.isNotEmpty) {
+        _noteController.text = note;
+      }
+      if (result.categoryId != null) {
+        _selectedCategoryId = result.categoryId;
+      }
+      if (result.paymentMethod.isNotEmpty &&
+          _paymentMethods.contains(result.paymentMethod)) {
+        _paymentMethod = result.paymentMethod;
+      }
+      if (result.date != null) {
+        _selectedDate = result.date!;
+      }
+      if (result.tagIds.isNotEmpty) {
+        _selectedTagIds
+          ..clear()
+          ..addAll(result.tagIds);
+      }
+    });
+  }
+
+  Future<void> _openVoiceInput() async {
+    final result = await showVoiceInputSheet(context, prefillOnly: true);
+    if (result != null && mounted) {
+      _applyVoiceResult(result);
+    }
+  }
+
   Future<void> _save() async {
     final amount = double.tryParse(_amount) ?? 0;
     if (amount <= 0 || _selectedCategoryId == null) {
@@ -137,7 +173,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.mic_rounded, color: AppColors.amber),
-              onPressed: () => showVoiceInputSheet(context),
+              onPressed: _openVoiceInput,
             ),
           ],
         ),

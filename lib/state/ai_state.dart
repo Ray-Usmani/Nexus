@@ -31,22 +31,27 @@ class AiState extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final context = appState.buildAiContext();
-    AiInsightResponse? response;
-    if (daily) {
-      response = await _service.fetchDailyInsight(context);
-    } else {
-      response = await _service.fetchWeeklyInsight(context);
-    }
-    response ??= _service.localFallback(context);
+    try {
+      final context = appState.buildAiContext();
+      AiInsightResponse? response;
+      if (daily) {
+        response = await _service.fetchDailyInsight(context);
+      } else {
+        response = await _service.fetchWeeklyInsight(context);
+      }
+      response ??= _service.localFallback(context);
 
-    if (daily) {
-      _dailyInsight = response.summary;
-    } else {
-      _weeklySummary = response.summary;
+      if (daily) {
+        _dailyInsight = response.summary;
+      } else {
+        _weeklySummary = response.summary;
+      }
+      _recommendations = response.recommendations;
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _recommendations = response.recommendations;
-    _loading = false;
-    notifyListeners();
   }
 }

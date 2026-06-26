@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import insights, voice
+from services.stt import provider_label
 
 load_dotenv()
 
@@ -24,10 +25,12 @@ app.include_router(voice.router)
 
 @app.get("/health")
 def health():
+    stt = provider_label()
     return {
         "status": "ok",
-        "model": os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b:free"),
-        "stt_model": os.getenv("OPENROUTER_STT_MODEL", "openai/whisper-large-v3"),
+        "model": os.getenv("OPENROUTER_MODEL", "openrouter/free"),
+        "stt_provider": stt,
+        "stt_note": "OpenRouter STT is paid; default uses local Whisper or Groq (free).",
     }
 
 if __name__ == "__main__":

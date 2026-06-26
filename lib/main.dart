@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_logo.dart';
 import 'state/app_state.dart';
+import 'state/accounts_state.dart';
 import 'state/ai_state.dart';
 import 'services/notification_service.dart';
 import 'services/widget_service.dart';
@@ -36,6 +37,7 @@ class SpendWiseApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) => AccountsState()),
         ChangeNotifierProvider(create: (_) => AiState()),
       ],
       child: MaterialApp(
@@ -65,6 +67,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AppState? _appState;
   final _alertedCategories = <String>{};
   bool _needsUnlock = false;
+  /// Set after a successful unlock so we ignore the [resumed] event from
+  /// dismissing the system biometric sheet (otherwise the app re-locks).
+  bool _skipNextResumeLock = false;
+  /// Set when the app goes to background while unlocked; cleared after re-lock.
+  bool _lockOnNextResume = false;
 
   @override
   void initState() {
@@ -82,10 +89,19 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        _appState?.biometricsEnabled == true &&
-        mounted) {
-      setState(() => _needsUnlock = true);
+    if (_appState?.biometricsEnabled != true) return;
+
+    if (state == AppLifecycleState.paused && !_needsUnlock) {
+      _lockOnNextResume = true;
+    } else if (state == AppLifecycleState.resumed && mounted) {
+      if (_skipNextResumeLock) {
+        _skipNextResumeLock = false;
+        return;
+      }
+      if (_lockOnNextResume) {
+        _lockOnNextResume = false;
+        setState(() => _needsUnlock = true);
+      }
     }
   }
 
@@ -93,9 +109,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (!mounted) return;
     _appState = context.read<AppState>();
     final aiState = context.read<AiState>();
+    final accountsState = context.read<AccountsState>();
 
     try {
-      await _appState!.init();
+      await Future.wait([
+        _appState!.init(),
+        accountsState.init(),
+      ]);
     } catch (e, stack) {
       debugPrint('AppState init failed: $e');
       debugPrint('$stack');
@@ -147,6 +167,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _onUnlocked() {
+    _skipNextResumeLock = true;
     setState(() => _needsUnlock = false);
   }
 

@@ -93,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             children: [
               Expanded(
-                child: _MiniStat(label: 'This week', value: state.last7DaysTotal),
+                child: _MiniStat(label: 'This week', value: state.thisWeekTotal),
               ),
               const SizedBox(width: 10),
               Expanded(

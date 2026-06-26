@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any
 
@@ -22,7 +23,7 @@ def verify_secret(authorization: str | None = Header(default=None)) -> None:
 
 
 async def _insight(context: dict[str, Any], focus: str) -> InsightResponse:
-    user = f"{focus}\n\nContext JSON:\n{context}"
+    user = f"{focus}\n\nContext JSON:\n{json.dumps(context, default=str)}"
     try:
         raw = await complete(SYSTEM_PROMPT, user)
         parsed = parse_insight(raw)
@@ -51,7 +52,7 @@ async def weekly_insight(request: Request) -> InsightResponse:
 
 @router.post("/chat", response_model=InsightResponse, dependencies=[Depends(verify_secret)])
 async def chat(body: ChatRequest) -> InsightResponse:
-    user = f"User question: {body.message}\n\nContext JSON:\n{body.context}"
+    user = f"User question: {body.message}\n\nContext JSON:\n{json.dumps(body.context, default=str)}"
     try:
         raw = await complete(SYSTEM_PROMPT, user)
         parsed = parse_insight(raw)

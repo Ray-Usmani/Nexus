@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../db/app_database.dart';
+import '../config/api_config.dart';
 import '../widgets/common_widgets.dart';
 import '../models/category_model.dart';
 import '../models/transaction_model.dart';
@@ -34,6 +35,7 @@ class AppState extends ChangeNotifier {
   List<CategoryModel> _categories = [];
   List<TagModel> _tags = [];
   List<TransactionModel> _transactions = []; // focused month only
+  List<TransactionModel> _rollingTransactions = []; // ~6 weeks for week/rolling totals
   List<BudgetPlanModel> _plans = [];          // focused month only
   List<FixedAllocationModel> _fixedAllocations = [];
   List<GoalModel> _goals = [];
@@ -51,6 +53,8 @@ class AppState extends ChangeNotifier {
   bool _notificationsWeekly = true;
   bool _notificationsOverspend = true;
   bool _biometricsEnabled = false;
+  String _apiBaseUrl = '';
+  String _apiAppSecret = '';
 
   static const settingProfileImage = 'profile_image_path';
   static const settingCurrencyCode = 'currency_code';
@@ -60,6 +64,8 @@ class AppState extends ChangeNotifier {
   static const settingNotificationsWeekly = 'notifications_weekly';
   static const settingNotificationsOverspend = 'notifications_overspend';
   static const settingBiometricsEnabled = 'biometrics_enabled';
+  static const settingApiBaseUrl = 'api_base_url';
+  static const settingApiAppSecret = 'api_app_secret';
 
   static const currencyOptions = <({String code, String symbol, String locale, String label})>[
     (code: 'PKR', symbol: 'Rs.', locale: 'en_PK', label: 'PKR (Rs.)'),
@@ -92,6 +98,8 @@ class AppState extends ChangeNotifier {
   bool get notificationsWeekly => _notificationsWeekly;
   bool get notificationsOverspend => _notificationsOverspend;
   bool get biometricsEnabled => _biometricsEnabled;
+  String get apiBaseUrl => _apiBaseUrl;
+  String get apiAppSecret => _apiAppSecret;
 
   List<CategoryModel> categoriesBySection(CategorySection s) =>
       _categories.where((c) => c.section == s).toList();
@@ -123,6 +131,7 @@ class AppState extends ChangeNotifier {
         _refreshTags(),
         _refreshPlans(),
         _refreshTransactions(),
+        _refreshRollingTransactions(),
         _refreshFixed(),
         _refreshGoals(),
       ]);
@@ -151,6 +160,17 @@ class AppState extends ChangeNotifier {
     _transactions = await _db.getTransactionsInRange(start, end);
   }
 
+  /// Loads transactions for the current + previous calendar weeks so
+  /// dashboard week totals are correct across month boundaries.
+  Future<void> _refreshRollingTransactions() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final start = weekStart.subtract(const Duration(days: 7));
+    final end = today.add(const Duration(days: 1));
+    _rollingTransactions = await _db.getTransactionsInRange(start, end);
+  }
+
   Future<void> _loadSettings() async {
     _profileImagePath = await _db.getSetting(settingProfileImage);
     _currencyCode = await _db.getSetting(settingCurrencyCode) ?? 'PKR';
@@ -160,6 +180,9 @@ class AppState extends ChangeNotifier {
     _notificationsWeekly = (await _db.getSetting(settingNotificationsWeekly)) != 'false';
     _notificationsOverspend = (await _db.getSetting(settingNotificationsOverspend)) != 'false';
     _biometricsEnabled = (await _db.getSetting(settingBiometricsEnabled)) == 'true';
+    _apiBaseUrl = await _db.getSetting(settingApiBaseUrl) ?? '';
+    _apiAppSecret = await _db.getSetting(settingApiAppSecret) ?? '';
+    ApiConfig.applyRuntime(baseUrl: _apiBaseUrl, appSecret: _apiAppSecret);
     configureCurrency(symbol: _currencySymbol, locale: _currencyLocale);
   }
 
@@ -207,6 +230,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setApiBaseUrl(String url) async {
+    _apiBaseUrl = url.trim();
+    await _db.setSetting(settingApiBaseUrl, _apiBaseUrl);
+    ApiConfig.applyRuntime(baseUrl: _apiBaseUrl, appSecret: _apiAppSecret);
+    notifyListeners();
+  }
+
+  Future<void> setApiAppSecret(String secret) async {
+    _apiAppSecret = secret.trim();
+    await _db.setSetting(settingApiAppSecret, _apiAppSecret);
+    ApiConfig.applyRuntime(baseUrl: _apiBaseUrl, appSecret: _apiAppSecret);
+    notifyListeners();
+  }
+
   Future<void> setFocusedMonth(DateTime month) async {
     _focusedMonth = DateTime(month.year, month.month, 1);
     await _db.ensurePlansForMonth(_focusedMonth.year, _focusedMonth.month);
@@ -236,9 +273,10 @@ class AppState extends ChangeNotifier {
       tagIds: tagIds,
     );
     await _db.insertTransaction(txn);
-    if (date.year == _focusedMonth.year && date.month == _focusedMonth.month) {
-      await _refreshTransactions();
-    }
+    await Future.wait([
+      if (date.year == _focusedMonth.year && date.month == _focusedMonth.month) _refreshTransactions(),
+      _refreshRollingTransactions(),
+    ]);
     _notifyIfReady();
   }
 
@@ -278,31 +316,40 @@ class AppState extends ChangeNotifier {
         .toList();
 
     await _db.insertSplitTransaction(parent, children);
-    if (date.year == _focusedMonth.year && date.month == _focusedMonth.month) {
-      await _refreshTransactions();
-    }
+    await Future.wait([
+      if (date.year == _focusedMonth.year && date.month == _focusedMonth.month) _refreshTransactions(),
+      _refreshRollingTransactions(),
+    ]);
     notifyListeners();
   }
 
   Future<void> updateTransaction(TransactionModel t) async {
     await _db.updateTransaction(t);
-    await _refreshTransactions();
+    await Future.wait([_refreshTransactions(), _refreshRollingTransactions()]);
     notifyListeners();
   }
 
   Future<void> deleteTransaction(String id) async {
     await _db.deleteTransaction(id);
-    await _refreshTransactions();
+    await Future.wait([_refreshTransactions(), _refreshRollingTransactions()]);
     notifyListeners();
   }
 
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
   /// Returns the list of "effective" expense rows for aggregation —
   /// split children replace their parent, non-split rows pass through.
-  List<TransactionModel> get _effectiveExpenses {
-    final children = _transactions.where((t) => t.parentId != null);
-    final standalone = _transactions.where((t) => t.parentId == null && !t.isSplitParent);
+  List<TransactionModel> _effectiveExpensesFrom(Iterable<TransactionModel> rows) {
+    final list = rows.toList();
+    final children = list.where((t) => t.parentId != null);
+    final standalone = list.where((t) => t.parentId == null && !t.isSplitParent);
     return [...standalone, ...children].where((t) => t.type == TransactionType.expense).toList();
   }
+
+  List<TransactionModel> get _effectiveExpenses => _effectiveExpensesFrom(_transactions);
+
+  List<TransactionModel> get _rollingEffectiveExpenses =>
+      _effectiveExpensesFrom(_rollingTransactions);
 
   /// Rows shown in Timeline/Daily — one line per parent (even if split).
   List<TransactionModel> get displayTransactions =>
@@ -339,11 +386,8 @@ class AppState extends ChangeNotifier {
 
   double get monthTotalAll => _effectiveExpenses.fold(0.0, (s, e) => s + e.amount);
 
-  double get last7DaysTotal {
-    final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(days: 7));
-    return _effectiveExpenses.where((e) => e.date.isAfter(cutoff)).fold(0.0, (s, e) => s + e.amount);
-  }
+  /// Total daily-category spend for the current calendar week (Mon–Sun).
+  double get thisWeekTotal => weeklyReview.thisWeekTotal;
 
   double get dailyAverage {
     final now = DateTime.now();
@@ -409,21 +453,27 @@ class AppState extends ChangeNotifier {
     return remainingBudget / remainingDays;
   }
 
-  double get monthlyRemaining => totalPlannedAll - monthTotalAll;
+  /// Remaining daily-budget envelope for the focused month (matches safe-to-spend scope).
+  double get monthlyRemaining => totalPlannedDaily - monthDailyTotal;
 
   // ═══════════════════════════ END OF DAY SUMMARY ══════════════════════════
 
   EndOfDaySummary get endOfDaySummary {
-    final today = expensesForDay(DateTime.now());
-    final yesterday = expensesForDay(DateTime.now().subtract(const Duration(days: 1)));
+    final now = DateTime.now();
+    final dailyToday = expensesForDay(now)
+        .where((e) => _dailyCategoryIds.contains(e.categoryId))
+        .toList();
+    final dailyYesterday = expensesForDay(now.subtract(const Duration(days: 1)))
+        .where((e) => _dailyCategoryIds.contains(e.categoryId))
+        .toList();
 
-    final todaySum = today.fold(0.0, (s, e) => s + e.amount);
-    final yesterdaySum = yesterday.fold(0.0, (s, e) => s + e.amount);
+    final todaySum = dailyToday.fold(0.0, (s, e) => s + e.amount);
+    final yesterdaySum = dailyYesterday.fold(0.0, (s, e) => s + e.amount);
 
     String? largestCategory;
     double largestAmount = 0;
     final byCategory = <String, double>{};
-    for (final e in today) {
+    for (final e in dailyToday) {
       byCategory[e.categoryId] = (byCategory[e.categoryId] ?? 0) + e.amount;
     }
     byCategory.forEach((catId, total) {
@@ -480,17 +530,21 @@ class AppState extends ChangeNotifier {
 
   WeeklyReview get weeklyReview {
     final now = DateTime.now();
-    final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
+    final today = _dateOnly(now);
+    final thisWeekStart = today.subtract(Duration(days: today.weekday - 1));
     final lastWeekStart = thisWeekStart.subtract(const Duration(days: 7));
+    final nextWeekStart = thisWeekStart.add(const Duration(days: 7));
 
     double thisWeekTotal = 0, lastWeekTotal = 0;
     final byCategory = <String, double>{};
 
-    for (final e in _effectiveExpenses) {
-      if (!e.date.isBefore(thisWeekStart) && e.date.isBefore(thisWeekStart.add(const Duration(days: 7)))) {
+    for (final e in _rollingEffectiveExpenses) {
+      if (!_dailyCategoryIds.contains(e.categoryId)) continue;
+      final day = _dateOnly(e.date);
+      if (!day.isBefore(thisWeekStart) && day.isBefore(nextWeekStart)) {
         thisWeekTotal += e.amount;
         byCategory[e.categoryId] = (byCategory[e.categoryId] ?? 0) + e.amount;
-      } else if (!e.date.isBefore(lastWeekStart) && e.date.isBefore(thisWeekStart)) {
+      } else if (!day.isBefore(lastWeekStart) && day.isBefore(thisWeekStart)) {
         lastWeekTotal += e.amount;
       }
     }
@@ -714,6 +768,7 @@ class AppState extends ChangeNotifier {
     await _db.clearAllUserData();
     await Future.wait([
       _refreshTransactions(),
+      _refreshRollingTransactions(),
       _refreshPlans(),
       _refreshFixed(),
       _refreshGoals(),

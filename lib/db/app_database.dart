@@ -8,6 +8,8 @@ import '../models/budget_plan_model.dart';
 import '../models/fixed_allocation_model.dart';
 import '../models/goal_model.dart';
 import '../models/tag_model.dart';
+import '../models/account_model.dart';
+import '../models/account_entry_model.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────
 /// LOCAL DATABASE (V2)
@@ -21,7 +23,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const _dbName = 'expense_tracker_v2.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   static const tableTransactions = 'transactions';
   static const tableCategories   = 'categories';
@@ -30,6 +32,8 @@ class AppDatabase {
   static const tableGoals        = 'goals';
   static const tableTags         = 'tags';
   static const tableSettings     = 'settings';
+  static const tableAccounts     = 'accounts';
+  static const tableAccountEntries = 'account_entries';
 
   final _uuid = const Uuid();
   String newId() => _uuid.v4();
@@ -131,8 +135,46 @@ class AppDatabase {
           )
         ''');
 
+        await _createAccountTables(db);
         await _seedDefaults(db);
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createAccountTables(db);
+        }
+      },
+    );
+  }
+
+  Future<void> _createAccountTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableAccounts (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        balance REAL NOT NULL DEFAULT 0,
+        colorIndex INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableAccountEntries (
+        id TEXT PRIMARY KEY,
+        accountId TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        date TEXT NOT NULL,
+        relatedAccountId TEXT,
+        transferGroupId TEXT,
+        FOREIGN KEY (accountId) REFERENCES $tableAccounts (id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_account_entry_account ON $tableAccountEntries (accountId)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_account_entry_date ON $tableAccountEntries (date)',
     );
   }
 
@@ -442,6 +484,57 @@ class AppDatabase {
   Future<void> deleteGoal(String id) async {
     final db = await database;
     await db.delete(tableGoals, where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─────────────────────────────── ACCOUNTS ───────────────────────────────
+  // Separate ledger — not tied to budget transactions or envelope math.
+
+  Future<List<AccountModel>> getAllAccounts() async {
+    final db = await database;
+    final rows = await db.query(tableAccounts, orderBy: 'title ASC');
+    return rows.map(AccountModel.fromMap).toList();
+  }
+
+  Future<void> upsertAccount(AccountModel a) async {
+    final db = await database;
+    await db.insert(tableAccounts, a.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> updateAccountBalance(String id, double balance) async {
+    final db = await database;
+    await db.update(tableAccounts, {'balance': balance}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteAccount(String id) async {
+    final db = await database;
+    await db.delete(tableAccountEntries, where: 'accountId = ? OR relatedAccountId = ?', whereArgs: [id, id]);
+    await db.delete(tableAccounts, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<AccountEntryModel>> getEntriesForAccount(String accountId) async {
+    final db = await database;
+    final rows = await db.query(
+      tableAccountEntries,
+      where: 'accountId = ?',
+      whereArgs: [accountId],
+      orderBy: 'date DESC',
+    );
+    return rows.map(AccountEntryModel.fromMap).toList();
+  }
+
+  Future<void> insertAccountEntry(AccountEntryModel e) async {
+    final db = await database;
+    await db.insert(tableAccountEntries, e.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteAccountEntry(String id) async {
+    final db = await database;
+    await db.delete(tableAccountEntries, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteAccountEntriesByTransferGroup(String transferGroupId) async {
+    final db = await database;
+    await db.delete(tableAccountEntries, where: 'transferGroupId = ?', whereArgs: [transferGroupId]);
   }
 
   // ─────────────────────────────── AGGREGATES ─────────────────────────────

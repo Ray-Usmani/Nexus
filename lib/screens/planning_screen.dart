@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/budget_plan_model.dart';
+import '../models/category_model.dart';
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/common_widgets.dart';
@@ -156,11 +157,111 @@ class PlanningScreen extends StatelessWidget {
     state.setFocusedMonth(m);
   }
 
-  Future<void> _addPlan(BuildContext context) async {
-    final state = context.read<AppState>();
-    if (state.categories.isEmpty) return;
-    final cat = state.categories.first;
-    await state.addPlan(categoryId: cat.id, plannedAmount: 1000);
+  void _addPlan(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.bg1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => const _AddPlanSheet(),
+    );
+  }
+}
+
+class _AddPlanSheet extends StatefulWidget {
+  const _AddPlanSheet();
+
+  @override
+  State<_AddPlanSheet> createState() => _AddPlanSheetState();
+}
+
+class _AddPlanSheetState extends State<_AddPlanSheet> {
+  final _amount = TextEditingController();
+  final _subcategory = TextEditingController();
+  String? _categoryId;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _subcategory.dispose();
+    super.dispose();
+  }
+
+  List<CategoryModel> _planCategories(AppState state) => [
+        ...state.categoriesBySection(CategorySection.daily),
+        ...state.categoriesBySection(CategorySection.fixed),
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final cats = _planCategories(state);
+    _categoryId ??= cats.isNotEmpty ? cats.first.id : null;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('New plan row', style: AppText.h2),
+          const SizedBox(height: 16),
+          if (cats.isEmpty)
+            Text('No categories available', style: AppText.bodyMuted)
+          else ...[
+            DropdownButtonFormField<String>(
+              initialValue: _categoryId,
+              dropdownColor: AppColors.bg2,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: cats
+                  .map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text('${c.icon} ${c.name}'),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _categoryId = v),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _subcategory,
+              decoration: const InputDecoration(
+                labelText: 'Subcategory (optional)',
+                hintText: 'e.g. Weekdays, Fuel',
+              ),
+              style: AppText.body,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _amount,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Planned amount'),
+              style: AppText.body,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () async {
+                final amt = double.tryParse(_amount.text);
+                if (amt == null || _categoryId == null) return;
+                await state.addPlan(
+                  categoryId: _categoryId!,
+                  plannedAmount: amt,
+                  subcategory: _subcategory.text.trim(),
+                );
+                if (context.mounted) Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.amber,
+                foregroundColor: AppColors.onAmber,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

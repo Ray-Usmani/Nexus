@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../models/category_model.dart';
 import '../services/auth_service.dart';
+import '../services/ai_service.dart';
+import '../config/api_config.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
@@ -155,6 +157,12 @@ class SettingsScreen extends StatelessWidget {
                     label: 'Security',
                     subtitle: 'PIN & Biometrics',
                     onTap: () => _showSecuritySheet(context, state),
+                  ),
+                  _SettingsTile(
+                    icon: Icons.smart_toy_outlined,
+                    label: 'AI Backend',
+                    subtitle: ApiConfig.isConfigured ? ApiConfig.effectiveBaseUrl : 'Not configured',
+                    onTap: () => _showAiBackendSheet(context, state),
                   ),
                   _SettingsTile(
                     icon: Icons.download_outlined,
@@ -432,6 +440,119 @@ class SettingsScreen extends StatelessWidget {
                     await state.setBiometricsEnabled(v);
                     setModalState(() {});
                   },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAiBackendSheet(BuildContext context, AppState state) {
+    final urlController = TextEditingController(
+      text: state.apiBaseUrl.isNotEmpty ? state.apiBaseUrl : ApiConfig.effectiveBaseUrl,
+    );
+    final secretController = TextEditingController(
+      text: state.apiAppSecret.isNotEmpty ? state.apiAppSecret : ApiConfig.effectiveAppSecret,
+    );
+    final ai = AiService();
+    var testing = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.bg1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Backend', style: AppText.h2.copyWith(fontSize: 18)),
+                const SizedBox(height: 8),
+                Text(
+                  'Physical phone: use your PC LAN IP (e.g. http://192.168.18.86:6969), not 10.0.2.2. '
+                  'Or USB: adb reverse tcp:6969 tcp:6969 then http://127.0.0.1:6969',
+                  style: AppText.caption,
+                ),
+                if (ApiConfig.likelyWrongHostForPhysicalDevice) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '10.0.2.2 only works on the Android emulator.',
+                    style: AppText.caption.copyWith(color: AppColors.warn),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: urlController,
+                  style: AppText.body,
+                  decoration: const InputDecoration(
+                    labelText: 'Backend URL',
+                    hintText: 'http://192.168.18.86:6969',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: secretController,
+                  style: AppText.body,
+                  decoration: const InputDecoration(
+                    labelText: 'APP_SECRET',
+                    hintText: 'Same value as backend/.env',
+                  ),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: testing
+                            ? null
+                            : () async {
+                                setModalState(() => testing = true);
+                                await state.setApiBaseUrl(urlController.text);
+                                await state.setApiAppSecret(secretController.text);
+                                final err = await ai.checkBackendHealth();
+                                if (!context.mounted) return;
+                                setModalState(() => testing = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      err == null
+                                          ? 'Connected to ${ApiConfig.effectiveBaseUrl}'
+                                          : 'Connection failed: $err',
+                                    ),
+                                  ),
+                                );
+                              },
+                        child: Text(testing ? 'Testing…' : 'Test connection'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await state.setApiBaseUrl(urlController.text);
+                          await state.setApiAppSecret(secretController.text);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.amber,
+                          foregroundColor: AppColors.onAmber,
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

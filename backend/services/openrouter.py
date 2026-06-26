@@ -7,20 +7,40 @@ import httpx
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 TRANSCRIBE_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
 
+# OpenRouter rotates free model slugs; `openrouter/free` auto-routes to an available free model.
+DEFAULT_MODEL = "openrouter/free"
+
+
+def _headers() -> dict[str, str]:
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "http://localhost"),
+        "X-Title": os.getenv("OPENROUTER_APP_TITLE", "SpendWise"),
+    }
+
+
+def _raise_openrouter_error(res: httpx.Response) -> None:
+    detail = res.text
+    try:
+        payload = res.json()
+        detail = payload.get("error", {}).get("message", detail)
+    except Exception:
+        pass
+    raise RuntimeError(f"OpenRouter {res.status_code}: {detail}")
+
 
 async def complete(system: str, user: str) -> str:
     api_key = os.getenv("OPENROUTER_API_KEY", "")
-    model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b:free")
+    model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY not set")
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         res = await client.post(
             OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=_headers(),
             json={
                 "model": model,
                 "messages": [
@@ -29,7 +49,8 @@ async def complete(system: str, user: str) -> str:
                 ],
             },
         )
-        res.raise_for_status()
+        if not res.is_success:
+            _raise_openrouter_error(res)
         data = res.json()
         return data["choices"][0]["message"]["content"]
 
@@ -62,10 +83,7 @@ async def transcribe(audio_bytes: bytes, audio_format: str) -> str:
     async with httpx.AsyncClient(timeout=120.0) as client:
         res = await client.post(
             TRANSCRIBE_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=_headers(),
             json={
                 "model": model,
                 "input_audio": {
@@ -74,7 +92,8 @@ async def transcribe(audio_bytes: bytes, audio_format: str) -> str:
                 },
             },
         )
-        res.raise_for_status()
+        if not res.is_success:
+            _raise_openrouter_error(res)
         data = res.json()
         text = data.get("text", "").strip()
         if not text:

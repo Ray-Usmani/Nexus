@@ -14,17 +14,25 @@ import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 
 /// Shows a full-screen voice / text entry experience.
-Future<void> showVoiceInputSheet(BuildContext context) {
-  return showModalBottomSheet(
+///
+/// When [prefillOnly] is true, tapping apply returns a [VoiceParseResult] for
+/// the caller to fill form fields instead of saving a transaction directly.
+Future<VoiceParseResult?> showVoiceInputSheet(
+  BuildContext context, {
+  bool prefillOnly = false,
+}) {
+  return showModalBottomSheet<VoiceParseResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _VoiceInputSheet(),
+    builder: (_) => _VoiceInputSheet(prefillOnly: prefillOnly),
   );
 }
 
 class _VoiceInputSheet extends StatefulWidget {
-  const _VoiceInputSheet();
+  const _VoiceInputSheet({this.prefillOnly = false});
+
+  final bool prefillOnly;
 
   @override
   State<_VoiceInputSheet> createState() => _VoiceInputSheetState();
@@ -168,17 +176,21 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
     final typed = _controller.text.trim();
     VoiceParseResult? result;
 
-    if (ApiConfig.isConfigured && (audioBytes != null || typed.isNotEmpty)) {
-      result = await _ai.parseVoiceExpense(
-        context: ctx,
-        audioBytes: audioBytes,
-        audioFilename: filename,
-        text: typed.isNotEmpty ? typed : null,
-      );
-    }
+    try {
+      if (ApiConfig.isConfigured && (audioBytes != null || typed.isNotEmpty)) {
+        result = await _ai.parseVoiceExpense(
+          context: ctx,
+          audioBytes: audioBytes,
+          audioFilename: filename,
+          text: typed.isNotEmpty ? typed : null,
+        );
+      }
 
-    if (result == null && typed.isNotEmpty) {
-      result = _localParse(typed, state);
+      if (result == null && typed.isNotEmpty) {
+        result = _localParse(typed, state);
+      }
+    } catch (_) {
+      result = null;
     }
 
     if (!mounted) return;
@@ -187,7 +199,7 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
       setState(() {
         _isProcessing = false;
         _status = ApiConfig.isConfigured
-            ? 'Could not reach AI backend'
+            ? 'Could not reach AI backend — check API_BASE_URL and APP_SECRET'
             : 'Set API_BASE_URL to use voice AI';
       });
       return;
@@ -253,9 +265,41 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
     await _processInput(fromText: true);
   }
 
-  Future<void> _save() async {
-    final result = _result;
+  VoiceParseResult _buildPrefillResult(VoiceParseResult? result, String text) {
+    if (result != null) {
+      return VoiceParseResult(
+        transcription: result.transcription.isNotEmpty ? result.transcription : text,
+        amount: result.amount,
+        categoryId: result.categoryId,
+        categoryName: result.categoryName,
+        note: result.note.isNotEmpty ? result.note : text,
+        paymentMethod: result.paymentMethod,
+        date: result.date,
+        tagIds: result.tagIds,
+        error: result.error,
+      );
+    }
+    return VoiceParseResult(transcription: text, note: text);
+  }
+
+  Future<void> _confirm() async {
+    var result = _result;
     final text = _controller.text.trim();
+
+    if (widget.prefillOnly) {
+      if (result == null && text.isNotEmpty) {
+        await _parseFromText();
+        if (!mounted) return;
+        result = _result;
+      }
+      if (!mounted) return;
+      if (result != null || text.isNotEmpty) {
+        Navigator.pop(context, _buildPrefillResult(result, text));
+        return;
+      }
+      setState(() => _status = 'Say or type an expense first');
+      return;
+    }
 
     if (result != null && result.hasAmount && result.categoryId != null) {
       final state = context.read<AppState>();
@@ -276,7 +320,7 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
       if (!mounted) return;
       final retry = _result;
       if (retry != null && retry.hasAmount && retry.categoryId != null) {
-        await _save();
+        await _confirm();
       }
       return;
     }
@@ -296,7 +340,9 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
 
   @override
   Widget build(BuildContext context) {
-    final canSave = _parsed && !_isProcessing && !_isListening;
+    final canConfirm = widget.prefillOnly
+        ? !_isProcessing && !_isListening && (_parsed || _controller.text.trim().isNotEmpty)
+        : _parsed && !_isProcessing && !_isListening;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.95,
@@ -505,9 +551,12 @@ class _VoiceInputSheetState extends State<_VoiceInputSheet>
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: canSave ? _save : (_isProcessing || _isListening ? null : _parseFromText),
+                onPressed: canConfirm ? _confirm : (_isProcessing || _isListening ? null : _parseFromText),
                 icon: const Icon(Icons.check_circle_outline, size: 20),
-                label: const Text('DONE', style: TextStyle(letterSpacing: 1.5)),
+                label: Text(
+                  widget.prefillOnly ? 'APPLY TO FORM' : 'DONE',
+                  style: const TextStyle(letterSpacing: 1.5),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
                   foregroundColor: AppColors.onAmber,

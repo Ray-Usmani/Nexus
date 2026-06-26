@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+
+const _requestTimeout = Duration(seconds: 45);
 
 class AiInsightResponse {
   final String summary;
@@ -67,10 +70,24 @@ class VoiceParseResult {
 class AiService {
   Map<String, String> get _headers {
     final h = {'Content-Type': 'application/json'};
-    if (ApiConfig.appSecret.isNotEmpty) {
-      h['Authorization'] = 'Bearer ${ApiConfig.appSecret}';
+    if (ApiConfig.effectiveAppSecret.isNotEmpty) {
+      h['Authorization'] = 'Bearer ${ApiConfig.effectiveAppSecret}';
     }
     return h;
+  }
+
+  /// Returns null on success, or an error message.
+  Future<String?> checkBackendHealth() async {
+    if (!ApiConfig.isConfigured) return 'API URL not configured';
+    final url = '${ApiConfig.effectiveBaseUrl}/health';
+    try {
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) return null;
+      return 'HTTP ${res.statusCode} from $url';
+    } catch (e) {
+      debugPrint('Backend health check failed ($url): $e');
+      return e.toString();
+    }
   }
 
   Future<AiInsightResponse?> fetchDailyInsight(Map<String, dynamic> context) =>
@@ -82,15 +99,20 @@ class AiService {
   Future<AiInsightResponse?> sendChat(String message, Map<String, dynamic> context) async {
     if (!ApiConfig.isConfigured) return null;
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/insights/chat'),
-        headers: _headers,
-        body: jsonEncode({'message': message, 'context': context}),
-      );
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.effectiveBaseUrl}/insights/chat'),
+            headers: _headers,
+            body: jsonEncode({'message': message, 'context': context}),
+          )
+          .timeout(_requestTimeout);
       if (res.statusCode == 200) {
         return AiInsightResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
       }
-    } catch (_) {}
+      debugPrint('AI chat failed: HTTP ${res.statusCode} ${ApiConfig.effectiveBaseUrl}');
+    } catch (e) {
+      debugPrint('AI chat error (${ApiConfig.effectiveBaseUrl}): $e');
+    }
     return null;
   }
 
@@ -105,10 +127,10 @@ class AiService {
     try {
       final req = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/voice/parse'),
+        Uri.parse('${ApiConfig.effectiveBaseUrl}/voice/parse'),
       );
-      if (ApiConfig.appSecret.isNotEmpty) {
-        req.headers['Authorization'] = 'Bearer ${ApiConfig.appSecret}';
+      if (ApiConfig.effectiveAppSecret.isNotEmpty) {
+        req.headers['Authorization'] = 'Bearer ${ApiConfig.effectiveAppSecret}';
       }
       req.fields['context'] = jsonEncode(context);
       if (text != null && text.trim().isNotEmpty) {
@@ -121,27 +143,35 @@ class AiService {
           filename: audioFilename ?? 'recording.m4a',
         ));
       }
-      final streamed = await req.send();
+      final streamed = await req.send().timeout(_requestTimeout);
       final res = await http.Response.fromStream(streamed);
       if (res.statusCode == 200) {
         return VoiceParseResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
       }
-    } catch (_) {}
+      debugPrint('Voice parse failed: HTTP ${res.statusCode} ${ApiConfig.effectiveBaseUrl}');
+    } catch (e) {
+      debugPrint('Voice parse error (${ApiConfig.effectiveBaseUrl}): $e');
+    }
     return null;
   }
 
   Future<AiInsightResponse?> _post(String path, Map<String, dynamic> context) async {
     if (!ApiConfig.isConfigured) return null;
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}$path'),
-        headers: _headers,
-        body: jsonEncode(context),
-      );
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.effectiveBaseUrl}$path'),
+            headers: _headers,
+            body: jsonEncode(context),
+          )
+          .timeout(_requestTimeout);
       if (res.statusCode == 200) {
         return AiInsightResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
       }
-    } catch (_) {}
+      debugPrint('AI $path failed: HTTP ${res.statusCode} ${ApiConfig.effectiveBaseUrl}');
+    } catch (e) {
+      debugPrint('AI $path error (${ApiConfig.effectiveBaseUrl}): $e');
+    }
     return null;
   }
 

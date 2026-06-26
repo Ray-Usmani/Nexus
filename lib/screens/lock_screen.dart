@@ -32,7 +32,7 @@ class _LockScreenState extends State<LockScreen> {
     } else {
       setState(() {
         _authenticating = false;
-        _error = 'Authentication failed. Try again.';
+        _error = 'Could not verify. Tap Unlock and try your fingerprint again, or use your device PIN.';
       });
     }
   }

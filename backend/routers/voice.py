@@ -5,7 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 from models.schemas import VoiceParseResponse
-from services.openrouter import complete, parse_expense_fields, transcribe
+from services.openrouter import complete, parse_expense_fields
+from services import stt
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -109,9 +110,15 @@ async def parse_voice(
             raise HTTPException(status_code=400, detail="Empty audio file")
         fmt = _audio_format(audio.filename, audio.content_type)
         try:
-            transcription = await transcribe(audio_bytes, fmt)
+            transcription = await stt.transcribe(audio_bytes, fmt)
         except Exception as e:
-            return VoiceParseResponse(error=f"Transcription failed: {e}")
+            msg = str(e)
+            if "402" in msg or "credit" in msg.lower():
+                msg += (
+                    " OpenRouter STT is paid. Use STT_PROVIDER=local (default) or add a free "
+                    "GROQ_API_KEY at console.groq.com."
+                )
+            return VoiceParseResponse(error=f"Transcription failed: {msg}")
 
     if not transcription:
         raise HTTPException(status_code=400, detail="Provide audio or text")

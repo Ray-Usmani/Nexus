@@ -10,8 +10,12 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: meta-llama/llama-3.3-70b:free
-      - key: OPENROUTER_STT_MODEL
-        value: openai/whisper-large-v3
+        value: openrouter/free
+      - key: STT_PROVIDER
+        value: local
+      - key: WHISPER_MODEL_SIZE
+        value: base
+      - key: GROQ_API_KEY
+        sync: false
       - key: APP_SECRET
         sync: false

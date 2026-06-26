@@ -5,6 +5,7 @@ import '../widgets/app_logo.dart';
 import '../screens/goals_screen.dart';
 import '../screens/planning_screen.dart';
 import '../screens/fixed_screen.dart';
+import '../screens/accounts_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -46,6 +47,11 @@ class AppDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
+                  _DrawerTile(
+                    icon: Icons.account_balance_outlined,
+                    label: 'Accounts',
+                    onTap: () => _navigate(context, const AccountsScreen()),
+                  ),
                   _DrawerTile(
                     icon: Icons.flag_outlined,
                     label: 'Goals',
